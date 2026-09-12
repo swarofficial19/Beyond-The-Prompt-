@@ -19,15 +19,17 @@ except Exception:
 
 def _load_corridor_index():
     records = {}
+    import os
+    base_path = os.path.join("starter-kit", "usa-corridors-20260906-r2")
     try:
-        with open("DALLAS_FORT_WORTH_CORRIDORS.full.json", "r", encoding="utf-8") as f:
+        with open(os.path.join(base_path, "DALLAS_FORT_WORTH_CORRIDORS.full.json"), "r", encoding="utf-8") as f:
             for c in json.load(f).get("corridors", []):
                 records[c.get("name", "").lower()] = c
-        with open("NYC_CORRIDORS.full.json", "r", encoding="utf-8") as f:
+        with open(os.path.join(base_path, "NYC_CORRIDORS.full.json"), "r", encoding="utf-8") as f:
             for c in json.load(f).get("corridors", []):
                 records[c.get("name", "").lower()] = c
-    except Exception:
-        pass
+    except Exception as e:
+        print("Error loading data:", e)
     return records
 
 CORRIDOR_DB = _load_corridor_index()

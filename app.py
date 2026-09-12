@@ -18,12 +18,37 @@ st.title("Corridor Opportunity Finder 🏪")
 # 1. AI Advisor Section
 st.header("🤖 AI Advisor")
 st.markdown("What can I help you regarding the corridor finder?")
+st.caption("Try asking: 'search for St. George' or 'dna of Downtown Brooklyn'")
 user_q = st.chat_input("Ask a question about corridors, opportunities, or data...")
 if user_q:
     with st.chat_message("user"):
         st.write(user_q)
     with st.chat_message("assistant"):
-        st.write("I am the AI Advisor! Once I am connected to the MCP server, I will analyze the dataset to answer: *" + user_q + "*")
+        try:
+            import mcp_server
+            # Simple keyword router to simulate LLM function calling
+            q_lower = user_q.lower()
+            if "search" in q_lower:
+                term = q_lower.replace("search for", "").replace("search", "").strip()
+                results = mcp_server.search_corridor(term)
+                if results:
+                    st.write(f"Here is what I found for '{term}':")
+                    st.dataframe(pd.DataFrame(results))
+                else:
+                    st.write(f"I couldn't find any corridors matching '{term}'.")
+            elif "dna" in q_lower or "details" in q_lower:
+                term = q_lower.replace("dna of", "").replace("details of", "").strip()
+                res = mcp_server.get_corridor_dna(term)
+                if "error" in res:
+                    st.error(res["error"])
+                else:
+                    st.write(f"**DNA Profile for {res['corridor']}**")
+                    st.write(f"*{res['character']}*")
+                    st.json(res)
+            else:
+                st.write("I am the AI Advisor! I am connected to the MCP tools. Try asking me to **search for [name]** or get the **DNA of [name]**.")
+        except Exception as e:
+            st.error(f"Error communicating with MCP tools: {e}")
 
 st.markdown("---")
 
