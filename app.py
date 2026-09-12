@@ -1,183 +1,313 @@
+import json
 import streamlit as st
 import pandas as pd
-import json
-import os
 
-st.set_page_config(page_title="Opportunity Finder", layout="wide")
+st.set_page_config(page_title="Corridor Scout AI", layout="wide", page_icon="🏙️")
 
 @st.cache_data
-def load_data(city):
-    filename = "NYC_CORRIDORS.full.json" if city == "New York City" else "DALLAS_FORT_WORTH_CORRIDORS.full.json"
-    filepath = os.path.join("starter-kit", "usa-corridors-20260906-r2", filename)
-    with open(filepath, encoding='utf-8') as f:
+def load_corridors(file_path):
+    with open(file_path, "r", encoding="utf-8") as f:
         data = json.load(f)
-    return data
+    return data.get("corridors", [])
 
-st.title("Corridor Opportunity Finder 🏪")
+# Sidebar Configuration
+st.sidebar.title("🏙️ Corridor Scout")
+metro_choice = st.sidebar.selectbox("Select Metro Region", ["New York City (NYC)", "Dallas–Fort Worth (DFW)"])
+data_file = "NYC_CORRIDORS.full.json" if "NYC" in metro_choice else "DALLAS_FORT_WORTH_CORRIDORS.full.json"
 
-# 1. AI Advisor Section
-st.header("🤖 AI Advisor")
-st.markdown("What can I help you regarding the corridor finder?")
-st.caption("Try asking: 'search for St. George' or 'dna of Downtown Brooklyn'")
-user_q = st.chat_input("Ask a question about corridors, opportunities, or data...")
-if user_q:
-    with st.chat_message("user"):
-        st.write(user_q)
-    with st.chat_message("assistant"):
-        try:
-            import mcp_server
-            # Simple keyword router to simulate LLM function calling
-            q_lower = user_q.lower()
-            if "search" in q_lower:
-                term = q_lower.replace("search for", "").replace("search", "").strip()
-                results = mcp_server.search_corridor(term)
-                if results:
-                    st.write(f"Here is what I found for '{term}':")
-                    st.dataframe(pd.DataFrame(results))
-                else:
-                    st.write(f"I couldn't find any corridors matching '{term}'.")
-            elif "dna" in q_lower or "details" in q_lower:
-                term = q_lower.replace("dna of", "").replace("details of", "").strip()
-                res = mcp_server.get_corridor_dna(term)
-                if "error" in res:
-                    st.error(res["error"])
-                else:
-                    st.write(f"**DNA Profile for {res['corridor']}**")
-                    st.write(f"*{res['character']}*")
-                    st.json(res)
-            else:
-                st.write("I am the AI Advisor! I am connected to the MCP tools. Try asking me to **search for [name]** or get the **DNA of [name]**.")
-        except Exception as e:
-            st.error(f"Error communicating with MCP tools: {e}")
+try:
+    corridors = load_corridors(data_file)
+except Exception as e:
+    st.error(f"Error loading {data_file}: {e}")
+    st.stop()
 
-st.markdown("---")
+# THIS DEFINES 'mode' - MUST BE ABOVE ALL 'if mode ==' STATEMENTS
+mode = st.sidebar.radio("Product Mode", [
+    "🎯 Opportunity Finder (Level 1)", 
+    "🧬 Corridor DNA Card & Map (Level 2)", 
+    "👥 Persona → Place Matcher (Level 2)",
+    "💬 Ask Corridor AI / MCP (Level 3)"
+])
 
-# Global Controls
-city = st.sidebar.selectbox("Select City", ["New York City", "Dallas-Fort Worth"])
-data = load_data(city)
+# -----------------------------------------------------------------------------
+# MODE 1: OPPORTUNITY FINDER (Level 1)
+# -----------------------------------------------------------------------------
+if mode == "🎯 Opportunity Finder (Level 1)":
+    st.header(f"🎯 Expansion Opportunity Finder — {metro_choice}")
+    st.caption("Score and rank commercial districts using whitespace quality, market momentum, and evening safety.")
 
-# Extract Data
-corridors = {c['corridor_id']: c for c in data.get('corridors', [])}
-archetypes = {a['archetype_id']: a for a in data.get('archetypes', [])}
-scores = data.get('corridor_archetype_scores', [])
-corridor_options = {c_id: c['name'] for c_id, c in corridors.items()}
-map_contexts = {m['corridor_id']: m for m in data.get('map', {}).get('corridor_context', [])}
-
-# Create Tabs for the other features
-tab1, tab2, tab3 = st.tabs(["📊 4. Opportunity Finder", "🗺️ 2. Map Explorer", "⚖️ 3. Compare Corridors"])
-
-with tab1:
-    st.subheader("Opportunity Finder")
-    st.write("Rank corridors to find the best fit for a specific business format.")
-    if archetypes:
-        archetype_options = {a['archetype_id']: f"{a['name']} ({a['category_id']})" for a in archetypes.values()}
-        selected_arch_id = st.selectbox(
-            "Select Business Format", 
-            options=list(archetype_options.keys()), 
-            format_func=lambda x: archetype_options[x]
+    col1, col2 = st.columns(2)
+    with col1:
+        target_sector = st.selectbox(
+            "Target Sector", 
+            ["cafe", "fitness", "beauty_wellness", "qsr", "fast_casual", "grocery_convenience"]
         )
+    with col2:
+        min_safety = st.slider("Minimum Evening Safety Index", 0, 100, 50)
 
-        arch_scores = [s for s in scores if s['archetype_id'] == selected_arch_id]
-        results = []
-        for s in arch_scores:
-            c_id = s['corridor_id']
-            if c_id not in corridors:
-                continue
-            
-            c = corridors[c_id]
-            category = archetypes[selected_arch_id]['category_id']
-            
-            existing_supply = 0
-            if category in c.get('places', {}).get('semantic_classes', {}):
-                existing_supply = c['places']['semantic_classes'][category].get('listing_count', 0)
-            
-            whitespace = 0.0
-            if 'behavior' in c and 'whitespace_quality' in c['behavior']:
-                whitespace = c['behavior']['whitespace_quality'].get(category.lower(), 0.0)
-            
-            fit_score = s.get('score', 0.0)
-            opportunity_score = fit_score + whitespace - (existing_supply * 0.01)
-            
-            results.append({
-                "Corridor": c.get('name', 'Unknown'),
-                "District": c.get('borough', c.get('district', 'Unknown')),
-                "Fit Tier": s.get('tier', 'UNKNOWN'),
-                "Fit Score": round(fit_score, 3),
-                "Whitespace": round(whitespace, 3),
-                "Existing Supply": existing_supply,
-                "Opportunity Score": round(opportunity_score, 3)
-            })
+    rows = []
+    for c in corridors:
+        b = c.get("behavior", {})
+        safety = b.get("crime_safety", {}).get("evening", 60)
+        if safety < min_safety:
+            continue
 
-        if results:
-            df = pd.DataFrame(results).sort_values(by="Opportunity Score", ascending=False).reset_index(drop=True)
-            cols = st.columns(3)
-            for i in range(min(3, len(df))):
-                with cols[i]:
-                    st.metric(label=f"#{i+1}: {df.iloc[i]['Corridor']}", value=f"Score: {df.iloc[i]['Opportunity Score']}")
-            st.dataframe(df, use_container_width=True)
-        else:
-            st.warning("No data available for the selected format.")
-    else:
-        st.warning("Archetype data not found.")
+        whitespace = b.get("whitespace_quality", {}).get(target_sector, 50)
+        momentum = b.get("neighborhood_momentum", 50)
+        
+        # Opportunity Index: 40% Whitespace + 30% Momentum + 30% Safety
+        opp_index = round((whitespace * 0.4) + (momentum * 0.3) + (safety * 0.3), 1)
 
-with tab2:
-    st.subheader("Explain the location in the map")
-    st.write("Visualize the key places that define this corridor.")
-    selected_map_corridor = st.selectbox("Select a Corridor", options=list(corridor_options.keys()), format_func=lambda x: corridor_options[x], key='map_sel')
+        rows.append({
+            "Corridor": c.get("name"),
+            "District": c.get("borough") or c.get("district", "N/A"),
+            "Form": c.get("form", "N/A"),
+            "Opportunity Index": opp_index,
+            f"{target_sector.title()} Whitespace": whitespace,
+            "Momentum": momentum,
+            "Safety (Evening)": safety
+        })
+
+    df_ranked = pd.DataFrame(rows).sort_values(by="Opportunity Index", ascending=False)
     
-    if selected_map_corridor in map_contexts:
-        m_ctx = map_contexts[selected_map_corridor]
-        points = m_ctx.get('points', [])
-        if points:
-            st.write(f"Displaying **{len(points)}** key places mapped in {corridor_options[selected_map_corridor]}.")
-            map_df = pd.DataFrame(points)
-            st.map(map_df, size=15)
-            st.write("Sample of mapped places:")
-            st.dataframe(map_df[['name', 'category', 'family_label']].head())
-        else:
-            st.info("No map coordinates found for this corridor.")
-    else:
-        st.info("Map context is not available for the selected corridor.")
+    st.subheader(f"Top Recommended Districts for {target_sector.title()}")
+    st.dataframe(df_ranked.head(10), use_container_width=True)
 
-with tab3:
-    st.subheader("Compare Corridors")
-    st.write("View two corridors side-by-side to understand their differences.")
-    colA, colB = st.columns(2)
+    if not df_ranked.empty:
+        st.bar_chart(df_ranked.head(7).set_index("Corridor")["Opportunity Index"])
+
+# -----------------------------------------------------------------------------
+# MODE 2: CORRIDOR DNA OVERVIEW & MAP (Level 2)
+# -----------------------------------------------------------------------------
+elif mode == "🧬 Corridor DNA Card & Map (Level 2)":
+    st.header(f"🧬 Corridor DNA Overview — {metro_choice}")
+    st.caption("Inspect district character, daypart activity density, spatial location, and demographics at a glance.")
+
+    corridor_names = [c.get("name") for c in corridors]
+    selected_name = st.selectbox("Select Corridor to Profile", corridor_names)
+    c = next(item for item in corridors if item.get("name") == selected_name)
+
+    colA, colB = st.columns([3, 1])
     with colA:
-        c1_id = st.selectbox("Corridor 1", options=list(corridor_options.keys()), format_func=lambda x: corridor_options[x], key='c1')
+        st.subheader(c.get("name"))
+        st.markdown(f"**District:** {c.get('borough') or c.get('district', 'N/A')} | **Form:** `{c.get('form', 'N/A')}`")
+        st.info(f"**Character:** {c.get('character')}")
     with colB:
-        c2_id = st.selectbox("Corridor 2", options=list(corridor_options.keys()), format_func=lambda x: corridor_options[x], key='c2')
-        
-    if c1_id and c2_id:
-        c1 = corridors[c1_id]
-        c2 = corridors[c2_id]
-        
-        # Helper to get total places safely
-        def get_total_places(c):
-            places = c.get('places', {}).get('semantic_classes', {})
-            return sum([v.get('listing_count', 0) for v in places.values()])
+        st.metric(label="Neighborhood Momentum", value=f"{c.get('behavior', {}).get('neighborhood_momentum', 'N/A')}/100")
+        st.metric(label="Transit vs Car", value=f"{c.get('behavior', {}).get('transit_car_orientation', 'N/A')}% Transit")
 
-        comp_data = {
-            "Metric": [
-                "Borough / District", 
-                "Level", 
-                "Total Existing Places", 
-                "Dominant Audience", 
-                "Character Description"
-            ],
-            c1['name']: [
-                c1.get('borough', c1.get('district', 'N/A')),
-                c1.get('level', 'N/A'),
-                get_total_places(c1),
-                c1.get('dominant_audience', 'N/A'),
-                (c1.get('character', 'N/A')[:80] + "...") if c1.get('character') else "N/A"
-            ],
-            c2['name']: [
-                c2.get('borough', c2.get('district', 'N/A')),
-                c2.get('level', 'N/A'),
-                get_total_places(c2),
-                c2.get('dominant_audience', 'N/A'),
-                (c2.get('character', 'N/A')[:80] + "...") if c2.get('character') else "N/A"
-            ]
-        }
-        st.table(pd.DataFrame(comp_data))
+    st.divider()
+
+    # Visual Map Component
+    st.markdown("#### 🗺️ Geographic Location")
+    coords_dict = {
+        "Manhattan": [40.7831, -73.9712],
+        "Brooklyn": [40.6782, -73.9442],
+        "Bronx": [40.8448, -73.8648],
+        "Queens": [40.7282, -73.7949],
+        "Staten Island": [40.5795, -74.1502],
+        "Dallas Core": [32.7767, -96.7970],
+        "Collin County": [33.1972, -96.6398],
+        "Denton County": [33.2148, -97.1331],
+        "Tarrant East": [32.7555, -97.3308],
+        "Alliance-North FW": [32.9343, -97.2295],
+        "Southern": [32.5421, -97.3208],
+        "Fort Worth West": [32.7601, -97.4589]
+    }
+    coords_dfw = {
+        "Deep Ellum": [32.7831, -96.7844],
+        "McKinney–Historic Downtown": [33.1972, -96.6153],
+        "The Colony–Grandscape": [33.0766, -96.8837],
+        "Little Elm": [33.1626, -96.9375],
+        "Keller–Old Town Keller": [32.9343, -97.2295],
+        "Burleson–Old Town": [32.5421, -97.3208],
+        "East Fort Worth–Woodhaven": [32.7667, -97.2344],
+        "Lakewood–Casa Linda": [32.8168, -96.7197],
+        "West Fort Worth–White Settlement": [32.7601, -97.4589]
+    }
+
+    if c.get("name") in coords_dfw:
+        lat, lon = coords_dfw[c.get("name")]
+    else:
+        district_key = c.get("borough") or c.get("district", "Manhattan")
+        lat, lon = coords_dict.get(district_key, [40.7128, -74.0060])
+
+    map_df = pd.DataFrame([{"lat": lat, "lon": lon, "name": c.get("name")}])
+    st.map(map_df, zoom=12)
+
+    st.divider()
+
+    col_left, col_right = st.columns(2)
+    with col_left:
+        st.markdown("#### 🕒 Daypart Activity Density")
+        dayparts = c.get("behavior", {}).get("daypart_occasion_density", {})
+        if dayparts:
+            df_day = pd.DataFrame(list(dayparts.items()), columns=["Daypart", "Activity Level"])
+            st.bar_chart(df_day.set_index("Daypart"))
+
+    with col_right:
+        st.markdown("#### 👥 Top 8 Audience Personas (Score 1–9)")
+        aud = c.get("audience_scores", {})
+        if aud:
+            df_aud = pd.DataFrame(list(aud.items()), columns=["Persona", "Score"]).sort_values(by="Score", ascending=False).head(8)
+            st.dataframe(df_aud, use_container_width=True)
+
+    anchors = c.get("anchors")
+    if anchors:
+        st.markdown("#### 📍 Core Landmarks & Activity Anchors")
+        anchor_list = [f"**{a.get('name')}** ({a.get('class', 'Landmark')})" for a in anchors if a.get("name")]
+        st.write(" • ".join(anchor_list))
+
+# -----------------------------------------------------------------------------
+# MODE 3: PERSONA -> PLACE MATCHING (Level 2)
+# -----------------------------------------------------------------------------
+elif mode == "👥 Persona → Place Matcher (Level 2)":
+    st.header(f"👥 Persona → Place Matcher — {metro_choice}")
+    st.caption("Select a customer demographic to discover districts where they are most concentrated.")
+
+    sample_aud = corridors[0].get("audience_scores", {})
+    available_personas = sorted(list(sample_aud.keys()))
+    
+    default_idx = available_personas.index("family_household") if "family_household" in available_personas else 0
+    chosen_persona = st.selectbox("Select Target Demographic Persona", available_personas, index=default_idx)
+
+    recs = []
+    for c in corridors:
+        score = c.get("audience_scores", {}).get(chosen_persona, 0)
+        recs.append({
+            "Corridor": c.get("name"),
+            "District": c.get("borough") or c.get("district", "N/A"),
+            "Audience Relevance (1–9)": score,
+            "Weekend Density": c.get("behavior", {}).get("daypart_occasion_density", {}).get("weekend_day", "N/A"),
+            "Evening Density": c.get("behavior", {}).get("daypart_occasion_density", {}).get("weekday_evening", "N/A")
+        })
+
+    df_recs = pd.DataFrame(recs).sort_values(by="Audience Relevance (1–9)", ascending=False)
+    st.subheader(f"Top Corridors for: {chosen_persona.replace('_', ' ').title()}")
+    st.dataframe(df_recs.head(10), use_container_width=True)
+
+# -----------------------------------------------------------------------------
+# MODE 4: ASK CORRIDOR AI / MCP (Level 3)
+# -----------------------------------------------------------------------------
+elif mode == "💬 Ask Corridor AI / MCP (Level 3)":
+    st.header("💬 Ask Corridor AI (Natural Language Tool Calling)")
+    st.caption("Ask questions in plain English. The agent parses intent and calls MCP tool primitives across ground-truth datasets.")
+
+    user_query = st.text_input(
+        "Ask a question about commercial corridors:", 
+        placeholder="e.g., I want to open a premium cafe for professionals in New York"
+    )
+
+    if user_query:
+        from mcp_server import search_corridor, get_corridor_dna, CORRIDOR_DB
+        
+        q_lower = user_query.lower()
+        st.markdown("##### ⚙️ MCP Agent Execution Trace:")
+
+        # Step 1: Detect Metro intent
+        filter_metro = None
+        if any(term in q_lower for term in ["new york", "nyc", "manhattan", "brooklyn", "bronx", "queens"]):
+            filter_metro = "nyc"
+            st.write("🔍 *Intent detected:* Target Metro = **New York City**")
+        elif any(term in q_lower for term in ["dallas", "dfw", "fort worth", "texas"]):
+            filter_metro = "dallas-fort-worth"
+            st.write("🔍 *Intent detected:* Target Metro = **Dallas–Fort Worth**")
+
+        # Step 2: Check for specific named corridor match
+        found = search_corridor(user_query)
+        
+        candidates = list(CORRIDOR_DB.values())
+        if filter_metro:
+            candidates = [c for c in candidates if c.get("metro_id") == filter_metro]
+
+        if found and len(found) == 1:
+            target_name = found[0]["name"]
+            st.write(f"🔧 *Agent selected MCP tool:* `get_corridor_dna(corridor_name='{target_name}')`")
+            dna_result = get_corridor_dna(target_name)
+            
+            st.success(f"**Analysis for {target_name}:**")
+            st.write(f"*{dna_result.get('character')}*")
+            
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown("**Top Demographic Personas:**")
+                st.json(dna_result.get("top_audiences", {}))
+            with c2:
+                st.markdown("**Daypart Density:**")
+                st.json(dna_result.get("daypart_density", {}))
+
+        else:
+            # Step 3: Multi-corridor ranking across ground-truth signals
+            st.write("🔧 *Agent executing MCP multi-corridor ranking across ground-truth signals...*")
+            
+            scored_matches = []
+            for c in candidates:
+                score = 0
+                reasons = []
+                b = c.get("behavior", {})
+                aud = c.get("audience_scores", {})
+                
+                # Check Cafe / Coffee intent
+                if "cafe" in q_lower or "coffee" in q_lower:
+                    cafe_ws = b.get("whitespace_quality", {}).get("cafe", 50)
+                    score += cafe_ws * 0.4
+                    reasons.append(f"Café whitespace: {cafe_ws}")
+                    
+                # Check Professional / Work / Remote intent
+                if any(w in q_lower for w in ["professional", "office", "work", "remote", "laptop"]):
+                    work_score = aud.get("hybrid_remote", 0) + aud.get("office_routine", 0)
+                    score += work_score * 8
+                    reasons.append(f"Work/Remote audience: {work_score}/18")
+                    
+                # Check Premium / Upscale intent
+                if any(w in q_lower for w in ["premium", "luxury", "upscale"]):
+                    prem_score = aud.get("resident_premium", 0) + aud.get("premium_shoppers", 0)
+                    score += prem_score * 6
+                    reasons.append(f"Premium demographic: {prem_score}/18")
+                    
+                # Check Nightlife / Evening intent
+                if any(w in q_lower for w in ["night", "nightlife", "bar", "evening"]):
+                    night_score = aud.get("late_night_social", 0) + (b.get("daypart_occasion_density", {}).get("late_night", 0) / 10)
+                    score += night_score * 5
+                    reasons.append(f"Nightlife score: {night_score:.1f}")
+
+                # Check Family / Suburban intent
+                if any(w in q_lower for w in ["family", "suburb", "school", "kids"]):
+                    fam_score = aud.get("family_household", 0)
+                    score += fam_score * 8
+                    reasons.append(f"Family household score: {fam_score}/9")
+
+                if score > 0:
+                    scored_matches.append({
+                        "name": c.get("name"),
+                        "district": c.get("borough") or c.get("district", "N/A"),
+                        "character": c.get("character"),
+                        "score": round(score, 1),
+                        "evidence": " • ".join(reasons[:2])
+                    })
+
+            if scored_matches:
+                scored_matches.sort(key=lambda x: x["score"], reverse=True)
+                top_match = scored_matches[0]
+                
+                # Fetch full DNA via MCP function
+                top_dna = get_corridor_dna(top_match["name"])
+                
+                st.success(f"**Top Recommended District: {top_match['name']} ({top_match['district']})**")
+                st.write(f"*{top_match['character']}*")
+                
+                st.markdown(f"**Key Supporting Signals:** {top_match['evidence']}")
+                
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.markdown("**Top Demographic Audiences:**")
+                    st.json(top_dna.get("top_audiences", {}))
+                with c2:
+                    st.markdown("**Time-of-Day Activity Index:**")
+                    st.json(top_dna.get("daypart_density", {}))
+
+                st.divider()
+                st.markdown("##### Alternative Recommended Matches:")
+                st.dataframe(pd.DataFrame(scored_matches[1:5])[["name", "district", "score", "evidence"]])
+            else:
+                st.warning("Could not identify specific intent patterns. Try asking with keywords like 'cafe', 'professionals', 'nightlife', or 'families'.")
