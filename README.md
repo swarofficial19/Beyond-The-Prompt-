@@ -1,32 +1,56 @@
-# Corridor Opportunity Finder
+Project Title:
+Corridor IQ: Agentic Commercial Location Intelligence & Site Selection
 
-This project was built for the Beyond the Prompt Hackathon (Day 2). 
+Problem Statement:
+Traditional commercial site selection relies on aggregate, static foot-traffic volumes and median household incomes. These flat metrics hide critical dimensions: when people are present, who makes up the customer base, and whether category demand is already oversaturated.  
 
-## What it does
-The **Corridor Opportunity Finder** is a web dashboard that helps businesses find the best corridors to open a new outlet. It ranks commercial corridors based on:
-1. **Fit Score:** How well a specific business format fits the corridor.
-2. **Whitespace Signal:** The potential room for growth.
-3. **Existing Supply:** A penalty for corridors that already have many similar businesses.
 
-## How to run it
+Consequently, retail and hospitality brands frequently misallocate capital. They lease spaces in districts that appear bustling on paper but suffer from temporal mismatch (e.g., launching an early-morning commuter cafe in a late-night bar district) or market saturation (entering corridors dominated by established chains). Furthermore, emerging AI real estate tools act as black boxes that hallucinate recommendations without verifiable, ground-truth data evidence.  
 
-### 1. Requirements
-- Python 3.x
-- Streamlit
-- Pandas
 
-### 2. Setup
-Install the required Python packages:
-```bash
-pip install streamlit pandas
-```
+Solution:
+Corridor IQ is a dual-interface decision platform powered by the Model Context Protocol (MCP) that replaces flat footfall assumptions with multi-dimensional behavioral models.  
 
-### 3. Run the App
-Start the Streamlit server by running:
-```bash
-streamlit run app.py
-```
-The application will open in your browser at `http://localhost:8501`.
 
-## Data Used
-The application uses the provided JSON datasets from the starter kit (`NYC_CORRIDORS.full.json` and `DALLAS_FORT_WORTH_CORRIDORS.full.json`) to analyze and rank commercial districts.
+By indexing 137 commercial districts across New York City and Dallas–Fort Worth, Corridor IQ combines natural language intent extraction with an explainable, weighted evaluation model:  
+
+Audience Persona Fit (35%): Measures alignment with 55 demographic personas (e.g., hybrid workers, morning commuters, families).  
+
+Business Format Fit (25%): Evaluates category fit scores and opportunity whitespace signals.  
+
+
+Corridor Momentum (20%): Factors in neighborhood growth trajectory and revitalization velocity.  
+JSON
+
+Geography & Safety (10%): Filters by evening perception and neighborhood access constraints.  
+
+Competition Opportunity (10%): Penalizes high chain dominance to prevent supply cannibalization.  
+JSON
+
+The system exposes ground-truth tool primitives to LLM agents via MCP while providing human analysts with interactive spatial maps, click-to-view parameter scorecards, and side-by-side comparative rankings.  
+
+
+Project Description:
+Corridor IQ bridges the gap between raw behavioral datasets and real-world commercial investment decisions. Ingesting over 18,000 ground-truth fit scores, 55 audience personas, and 5-part daily activity curves from NYC and DFW metros, the platform enables operators to answer: "Where should I expand, what signals justify it, and what operational window will succeed?"  
+
+The platform features a modern landing hub that leads into a conversational AI Advisor. When an entrepreneur asks, "What business do you want to begin with?", the advisor translates their vision into ground-truth constraints, identifies top candidates, pins the #1 recommendation on an interactive Folium map with full popup parameter scorecards, and displays a comprehensive multi-factor comparison table below.  
+
+
+Key Features
+Conversational AI Advisor (Level 3 MCP Agent): Natural language interface that decodes commercial concepts (e.g., "Specialty Coffee in Dallas") and routes queries through ground-truth tool calling without hallucination.  
+
+
+Explainable 5-Factor Weighted Scorecard: Eliminates black-box scoring by decomposing every recommendation into exact metrics: Audience Fit (35%), Business Fit (25%), Corridor Score (20%), Geography/Safety (10%), and Competition (10%).  
+
+
+Temporal Daypart Matching: Visualizes 5-part activity curves (AM, Midday, Evening, Late Night, Weekend) to prevent operating hour mismatches (e.g., Deep Ellum late-night vs. Keller morning commuters).  
+
+Interactive Folium Spatial Mapping: Dynamically centers and pins the top-ranked district on a live map, featuring clickable popup scorecards revealing detailed underlying metrics.  
+
+Side-by-Side Landmark Parameter Comparison: Tabulates candidate districts across individual scoring dimensions for rapid executive benchmarking.  
+
+
+Commercial Opportunity Finder (Level 1 & 2): Macro-level screening tool that ranks all 137 corridors across category whitespace quality, neighborhood momentum, and customizable evening safety thresholds.  
+
+
+Multi-Metro Schema Adaptability: Built-in normalization that seamlessly ingests both NYC's canonical H3-10 mapped districts and DFW's behavioral calculus envelopes.  
