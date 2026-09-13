@@ -1,6 +1,8 @@
 Project Title:
 Corridor IQ: Agentic Commercial Location Intelligence & Site Selection
 
+Project URL  : https://beyond-the-prompt-1.onrender.com/
+
 Problem Statement:
 Traditional commercial site selection relies on aggregate, static foot-traffic volumes and median household incomes. These flat metrics hide critical dimensions: when people are present, who makes up the customer base, and whether category demand is already oversaturated.  
 
